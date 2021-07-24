@@ -1,0 +1,13 @@
+package net.osx.pantipcmd;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class PantipcmdApplication {
+
+  public static void main(String[] args) {
+    SpringApplication.run(PantipcmdApplication.class, args);
+  }
+
+}
