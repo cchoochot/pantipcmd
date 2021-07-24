@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class PantipcmdApplication {
+public class PantipCmdApplication {
 
   public static void main(String[] args) {
-    SpringApplication.run(PantipcmdApplication.class, args);
+    SpringApplication.run(PantipCmdApplication.class, args);
   }
 
 }

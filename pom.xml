@@ -11,7 +11,7 @@
 	<groupId>net.osx</groupId>
 	<artifactId>pantipcmd</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name>pantipcmd</name>
+	<name>PantipCmd</name>
 	<description>Pantip via Command Line</description>
 	<properties>
 		<java.version>11</java.version>

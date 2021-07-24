@@ -3,9 +3,8 @@ package net.osx.pantipcmd;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -13,8 +12,11 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.shell.Availability;
 import org.springframework.shell.standard.ShellComponent;
 import org.springframework.shell.standard.ShellMethod;
+import org.springframework.shell.standard.ShellMethodAvailability;
+import org.springframework.shell.standard.ShellOption;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
@@ -24,28 +26,37 @@ import org.springframework.web.client.RestTemplate;
 @Slf4j
 public class PantipShell {
 
-  @Getter
-  @Setter
+  @Autowired
+  private PantipCmdConfiguration config;
+
+  private boolean isLogin = false;
+
+  private String userId = null;
+
   private List<String> cookies = Collections.emptyList();
 
   private RestTemplate restTemplate = new RestTemplateBuilder().build();
 
+  public Availability availabilityCheck() {
+    return isLogin
+        ? Availability.available()
+        : Availability.unavailable("you have not logged in yet.");
+  }
+
   @ShellMethod("Head")
   public String head() {
-    log.info("Head: {}", getCookies());
+    HttpHeaders headers = new HttpHeaders();
+    headers.put(HttpHeaders.COOKIE, cookies);
 
-    HttpHeaders httpHeaders = restTemplate.headForHeaders("https://pantip.com");
+    HttpHeaders httpHeaders = restTemplate
+        .headForHeaders(config.getHeadUrl(), new HttpEntity<>(headers));
+    log.info("head {}", httpHeaders);
 
-    // return httpHeaders.getAccessControlAllowOrigin();
     return httpHeaders.toSingleValueMap().toString();
   }
 
   @ShellMethod("Login")
   public String login(String user, String pass) {
-
-    log.info("Login: {}", getCookies());
-
-    // headers
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
@@ -59,29 +70,40 @@ public class PantipShell {
     HttpEntity<MultiValueMap<String, String>> httpEntity = new HttpEntity<>(map, headers);
 
     ResponseEntity<String> responseEntity = restTemplate
-        .postForEntity("https://pantip.com/login/authentication", httpEntity, String.class);
+        .postForEntity(config.getLoginUrl(), httpEntity, String.class);
 
     final List<String> responseCookies = responseEntity.getHeaders().get(HttpHeaders.SET_COOKIE);
-    setCookies(responseCookies);
+    cookies = responseCookies;
 
-    String token = Optional.ofNullable(responseCookies).orElse(Collections.emptyList()).stream()
+    final String token = Optional.ofNullable(responseCookies).orElse(Collections.emptyList())
+        .stream()
         .filter(item -> item.startsWith("token="))
         .findFirst()
         .orElse(null);
 
-    return StringUtils.hasText(token) ? "Logged in successfully" : "Login fails";
+    isLogin = StringUtils.hasText(token);
+    if (isLogin) {
+      userId = retrieveUserId(responseEntity);
+    }
+
+    return isLogin ? "UserID " + userId + " Logged in successfully" : "Login fails";
+  }
+
+  private String retrieveUserId(ResponseEntity<String> responseEntity) {
+    String path = responseEntity.getHeaders().getLocation().getPath();
+    String[] split = path.split("/");
+    String userId = split[split.length - 1];
+    return userId;
   }
 
   @ShellMethod("Notifications")
-  public String notif() {
-
-    log.info("Notif: {}", getCookies());
-
+  @ShellMethodAvailability("availabilityCheck")
+  public String notif(@ShellOption(defaultValue = "1") int page) {
     HttpHeaders headers = new HttpHeaders();
-    headers.put(HttpHeaders.COOKIE, getCookies());
+    headers.put(HttpHeaders.COOKIE, cookies);
 
     ResponseEntity<String> responseEntity = restTemplate.exchange(
-        "https://pantip.com/message/private_message/ajax_inbox?p=1",
+        config.getNotificationUrl() + "?p=" + page,
         HttpMethod.GET,
         new HttpEntity<>(headers),
         String.class);
@@ -90,23 +112,25 @@ public class PantipShell {
   }
 
   @ShellMethod("Logout")
+  @ShellMethodAvailability("availabilityCheck")
   public String logout() {
-
-    log.info("Logout: {}", getCookies());
-
     HttpHeaders headers = new HttpHeaders();
-    headers.put(HttpHeaders.COOKIE, getCookies());
+    headers.put(HttpHeaders.COOKIE, cookies);
 
     ResponseEntity<String> responseEntity = restTemplate.exchange(
-        "https://pantip.com/logout",
+        config.getLogoutUrl(),
         HttpMethod.GET,
         new HttpEntity<>(headers),
         String.class);
 
     // release cookies
-    this.cookies = responseEntity.getHeaders().get(HttpHeaders.SET_COOKIE);
+    cookies = responseEntity.getHeaders().get(HttpHeaders.SET_COOKIE);
 
-    return responseEntity.getStatusCode() == HttpStatus.OK ? "Logged out" : "Unknown error";
+    if (responseEntity.getStatusCode() == HttpStatus.OK) {
+      isLogin = false;
+    }
+
+    return isLogin ? "Unknown error" : "Logged out";
   }
 
   // TODO
