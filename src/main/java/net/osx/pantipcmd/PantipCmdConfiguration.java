@@ -23,5 +23,5 @@ public class PantipCmdConfiguration {
 
   @Getter
   @Setter
-  private String notificationUrl;
+  private String inboxUrl;
 }
